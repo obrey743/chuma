@@ -1,1 +1,7 @@
- A community-focused financial platform designed to help groups manage savings, loans, community products, inventory and savings goals. AI makes the platform more accessible by helping members understand products and create practical savings plan
+# CHUMA frontend (Full frontend)
+React + Vite + Tailwind v4.
+
+    npm install
+    npm run dev      # http://localhost:5173
+
+Runs on mock data (src/data/mockData.js). To use the real backend, copy .env.example to .env and set VITE_USE_MOCK=false.

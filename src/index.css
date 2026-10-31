@@ -1,0 +1,18 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --color-chuma-50: #fff3f2;
+  --color-chuma-100: #ffe3e1;
+  --color-chuma-200: #ffc7c3;
+  --color-chuma-500: #d6403f;
+  --color-chuma-600: #c42f2f;
+  --color-chuma-700: #a32424;
+  --color-chuma-900: #4a1515;
+  --color-gold: #e2b24c;
+}
+body { background: #fffaf9; color: #2a1a1a; }
+.dark body { background: #170f0f; color: #f6eceb; }
+@keyframes pop { from { opacity: 0; transform: scale(.96) translateY(8px); } to { opacity: 1; transform: none; } }
+.pop { animation: pop .35s ease-out; }
+@media (prefers-reduced-motion: reduce) { .pop { animation: none; } }
