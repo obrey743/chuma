@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Wallet, HandCoins, Hourglass, X, ExternalLink, PiggyBank, Users } from 'lucide-react'
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { Card, Field, Select, Btn, useToast } from '../components/ui'
-import { checkout, applyForLoan } from '../services/api'
+import { checkout, applyForLoan, getMyCommunities } from '../services/api'
+import { contributionHistory, loans as listLoans } from '../services/finance'
 import { money, myCommunities, savingsHistory, monthly, myLoans, loanRequestsSeed, loanTerms, personalSeed, personalMonthly } from '../data/mockData'
 
 const METHODS = ['MTN Mobile Money', 'Airtel Money', 'Zamtel Money', 'Visa / Mastercard']
@@ -21,18 +22,27 @@ const Stats = ({ items }) => (
 
 export default function Savings() {
   const [toast, show] = useToast()
-  const [view, setView] = useState(myCommunities[0].id) // a community id, or 'personal'
-  const [amount, setAmount] = useState(myCommunities[0].contribution)
+  const [communities,setCommunities] = useState([])
+  const [view, setView] = useState('personal') // a community id, or 'personal'
+  const [amount, setAmount] = useState('100')
   const [method, setMethod] = useState(METHODS[0])
   const [busy, setBusy] = useState(false)
   const [co, setCo] = useState(null)
-  const [history, setHistory] = useState(savingsHistory)
-  const [requests, setRequests] = useState(loanRequestsSeed)
+  const [history, setHistory] = useState([])
+  const [requests, setRequests] = useState([])
+  const [activeLoans,setActiveLoans] = useState([])
   const [modal, setModal] = useState(false)
 
+  useEffect(()=>{getMyCommunities().then(rows=>{setCommunities(rows);if(rows.length)setView(rows[0].id)}).catch(err=>show(err.message))},[])
+  useEffect(()=>{if(view==='personal')return;Promise.all([contributionHistory(view),listLoans(view)]).then(([cs,ls])=>{
+    const cm=communities.find(x=>x.id===view)
+    setHistory(cs.map(x=>({id:x.id,date:new Date(x.createdAt).toLocaleDateString(),community:cm?.name||view,amount:Number(x.amount),method:'Community',status:x.status})))
+    setActiveLoans(ls.filter(x=>x.status==='ACTIVE').map(x=>({id:x.id,community:cm?.name||view,amount:Number(x.principal),interest:Number(x.annualInterestRate)*100,term:x.durationMonths,repaid:x.repayments.reduce((a,r)=>a+Number(r.amount),0),status:x.status,next_due:x.schedule?.[0]?.dueDate?.slice(0,10)||'-'})))
+    setRequests(ls.filter(x=>x.status==='PENDING').map(x=>({id:x.id,community:cm?.name||view,amount:Number(x.principal),purpose:x.purpose,term:x.durationMonths,status:x.status,date:new Date(x.createdAt).toLocaleDateString()})))
+  }).catch(err=>show(err.message))},[view,communities])
   const personal = view === 'personal'
-  const c = myCommunities.find((x) => x.id === view)
-  const choose = (id) => { setView(id); setCo(null); const g = myCommunities.find((x) => x.id === id); if (g) setAmount(g.contribution) }
+  const c = communities.find((x) => x.id === view)
+  const choose = (id) => { setView(id); setCo(null); const g = communities.find((x) => x.id === id); if (g) setAmount(g.contribution) }
 
   const pay = async (e) => {
     e.preventDefault()
@@ -41,7 +51,7 @@ export default function Savings() {
     try {
       const r = await checkout({ community_id: c.id, member_id: 'me', amount: Number(amount), payment_method: method })
       setCo(r)
-      setHistory([{ id: Date.now(), date: 'Today', community: c.name, amount: Number(amount), method, status: 'PENDING' }, ...history])
+      setHistory([{ id: Date.now(), date: 'Today', community: c.name, amount: Number(amount), method, status: r.status === 'CONFIRMED' ? 'CONFIRMED' : 'PENDING' }, ...history])
     } catch (err) { show(err.message) }
     setBusy(false)
   }
@@ -49,24 +59,24 @@ export default function Savings() {
   let g = null
   if (c) {
     const hist = history.filter((h) => h.community === c.name)
-    const loans = myLoans.filter((l) => l.community === c.name)
+    const loans = activeLoans.filter((l) => l.community === c.name)
     const reqs = requests.filter((r) => r.community === c.name)
     g = { hist, loans, reqs,
       total: hist.filter((h) => h.status === 'CONFIRMED').reduce((a, h) => a + h.amount, 0),
       owed: loans.reduce((a, l) => a + Math.round(l.amount * (1 + l.interest / 100)) - l.repaid, 0),
-      chart: monthly.map((d) => ({ m: d.m, v: Math.round(d.v * (c.id === 'com_1' ? 0.6 : 0.4)) })) }
+      chart: monthly.map(d=>({m:d.m,v:hist.filter(x=>x.status==='CONFIRMED' && new Date(x.date).toLocaleString('en',{month:'short'})===d.m).reduce((a,x)=>a+x.amount,0)})) }
   }
 
   return (
     <div className="space-y-8">
       {toast}
       <header className="flex flex-wrap items-end justify-between gap-3">
-        <div><h1 className="text-2xl font-extrabold">Savings and loans</h1><p className="text-sm text-stone-500 dark:text-stone-400">Track each group, or your own personal savings.</p></div>
+        <div><h1 className="text-2xl font-extrabold">Savings and loans</h1><p className="text-sm text-stone-500 dark:text-stone-400">Track live community accounts. Personal tracking is only an on-device demo.</p></div>
         {!personal && <Btn onClick={() => setModal(true)}>Request a loan</Btn>}
       </header>
 
       <div className="-mx-5 flex gap-2 overflow-x-auto px-5">
-        {myCommunities.map((x) => <button key={x.id} onClick={() => choose(x.id)} className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold ${view === x.id ? 'bg-chuma-600 text-white' : 'bg-chuma-50 text-chuma-700 dark:bg-white/5 dark:text-chuma-100'}`}><Users size={15} />{x.name}</button>)}
+        {communities.map((x) => <button key={x.id} onClick={() => choose(x.id)} className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold ${view === x.id ? 'bg-chuma-600 text-white' : 'bg-chuma-50 text-chuma-700 dark:bg-white/5 dark:text-chuma-100'}`}><Users size={15} />{x.name}</button>)}
         <button onClick={() => choose('personal')} className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold ${personal ? 'bg-chuma-600 text-white' : 'bg-chuma-50 text-chuma-700 dark:bg-white/5 dark:text-chuma-100'}`}><PiggyBank size={15} />Personal savings</button>
       </div>
 
@@ -83,9 +93,9 @@ export default function Savings() {
               </form>
               {co && (
                 <div className="pop mt-4 rounded-2xl bg-chuma-50 p-4 text-sm dark:bg-white/5">
-                  <p className="font-semibold">Checkout ready. Complete payment on DevDraft.</p>
+                  <p className="font-semibold">{co.simulated ? 'Simulated test contribution — no money moved.' : 'Checkout created. Complete payment with your provider.'}</p>
                   <p className="mt-1 text-stone-500 dark:text-stone-400">Reference {co.transaction_id}, status {co.status.toLowerCase()}. Your contribution shows as confirmed once payment is verified.</p>
-                  <a href={co.checkout_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 font-semibold text-chuma-600">Open checkout <ExternalLink size={14} /></a>
+                  {co.checkout_url && <a href={co.checkout_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 font-semibold text-chuma-600">Open checkout <ExternalLink size={14} /></a>}
                 </div>
               )}
             </Card>

@@ -1,4 +1,5 @@
 import { NAV } from './nav'
+import { isDemo } from '../services/auth'
 export default function AppLayout({ tab, setTab, children }) {
   return (
     <div className="min-h-screen md:pl-64">
@@ -12,6 +13,7 @@ export default function AppLayout({ tab, setTab, children }) {
       </aside>
       <main className="mx-auto max-w-5xl px-5 pb-28 pt-6 md:pb-10 md:pt-8">
         <img src="/chumalogo.png" alt="CHUMA" className="mb-6 w-32 rounded-2xl shadow-md md:hidden" />
+        {isDemo() && <p className="mb-5 rounded-2xl bg-amber-100 px-4 py-2 text-sm font-medium text-amber-900 dark:bg-amber-400/15 dark:text-amber-200">Demo mode: sample data, no real money. The AI Planner uses real Gemma 4.</p>}
         {children}
       </main>
       <nav className="fixed inset-x-3 bottom-3 z-30 flex justify-around rounded-3xl border border-chuma-100 bg-white/90 p-1.5 shadow-xl backdrop-blur md:hidden dark:border-white/10 dark:bg-[#1d1212]/90">

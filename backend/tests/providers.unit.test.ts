@@ -1,0 +1,2 @@
+import { describe,expect,it } from 'vitest'; import { MockPaymentProvider } from '../src/modules/payments/providers/mock.provider.js'; import { MockAiProvider } from '../src/modules/ai/providers/mock-ai.provider.js';
+describe('mock providers',()=>{it('labels payments simulated',async()=>expect((await new MockPaymentProvider().createCheckout({transactionId:'x',amount:'1.00',currency:'ZMW'})).simulated).toBe(true)); it('labels AI output simulated',async()=>expect(await new MockAiProvider().analyseProduct({description:'solar panel'})).toMatchObject({simulated:true}));});

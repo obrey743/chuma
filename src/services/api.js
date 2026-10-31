@@ -1,47 +1,44 @@
-import { myCommunities, exploreCommunities } from '../data/mockData'
-const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false'
-// AI endpoints are live already, so they use the real backend unless VITE_USE_MOCK_AI=true
+import { isDemo } from './auth'
+import { exploreCommunities } from '../data/mockData'
+import { finance, listCommunities, communityDashboard, communityMembers, createContribution, confirmDemoContribution, createCheckout, requestLoan, loanProducts } from './finance'
 const USE_MOCK_AI = import.meta.env.VITE_USE_MOCK_AI === 'true'
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000'
-const wait = (d, ms = 250) => new Promise((r) => setTimeout(() => r(d), ms))
-
-// Calls YOUR backend only. DevDraft/Gemma keys never live in the browser.
-async function request(path, options) {
-  const res = await fetch(`${BASE}${path}`, { headers: { 'Content-Type': 'application/json' }, ...options })
-  const json = await res.json()
-  if (!json.success) throw new Error(json.message || 'Something went wrong')
-  return json.data
+const mockWait = (data) => new Promise(resolve=>setTimeout(()=>resolve(data),300))
+export const getMyCommunities = async () => {
+  const groups=await listCommunities()
+  return Promise.all(groups.map(async c=>{
+    const [summary, memberRows] = await Promise.all([communityDashboard(c.id),communityMembers(c.id)])
+    return { id:c.id,name:c.name,role:c.memberships?.[0]?.role?.toLowerCase()||'member',
+      contribution:Number(c.minimumContribution||0), frequency:c.contributionFrequency||'FLEXIBLE',
+      member_count:summary.totalMembers, members:memberRows.map(x=>`${x.user.firstName} ${x.user.lastName}`),
+      loanable_funds:Number(summary.lendableFunds||0),total_savings:Number(summary.totalContributions||0),
+      outstanding_loans:Number(summary.outstandingLoanPrincipal||0) }
+  }))
 }
-const post = (path, body) => request(path, { method: 'POST', body: JSON.stringify(body) })
-
-export const getMyCommunities = () => (USE_MOCK ? wait(myCommunities) : request('/api/communities/mine'))
-export const getExplore = () => (USE_MOCK ? wait(exploreCommunities) : request('/api/communities/explore'))
-export const getDashboard = (id) => request(`/api/communities/${id}/dashboard`)
-export const checkout = (b) => (USE_MOCK ? wait({ transaction_id: `txn_${Date.now()}`, checkout_url: 'https://example.com/checkout', status: 'PENDING' }, 700) : post('/api/payments/checkout', b))
-export const applyForLoan = (b) => (USE_MOCK ? wait({ id: `req_${Date.now()}`, status: 'PENDING' }, 600) : post('/api/loans', b))
-export const savingsGoal = (b) => (USE_MOCK ? wait({ id: `goal_${Date.now()}`, ...b }) : post('/api/savings-goals', b))
-export const recommendPlan = (b) => (USE_MOCK_AI ? wait(null) : post('/api/ai/recommend-plan', b))
-
-// Backend returns name/category/specifications; the page uses product_name/product_category
-const toProduct = (d) => ({
-  product_name: d.name,
-  product_category: d.category,
-  description: d.description,
-  specifications: d.specifications || [],
-  detected_price: d.detected_price,
-  is_mock: d.is_mock,
-})
-
-export async function analyzeProduct(file) {
-  if (USE_MOCK_AI) return wait(toProduct({ name: 'Solar Home Kit', category: 'Electronics', description: 'Solar lighting system with a panel, battery and three bulbs', specifications: ['Solar panel', 'Battery', '3 bulbs'], detected_price: null, is_mock: true }), 1600)
-  const fd = new FormData(); fd.append('image', file)
-  let json
-  try {
-    const res = await fetch(`${BASE}/api/ai/analyze-product`, { method: 'POST', body: fd })
-    json = await res.json()
-  } catch {
-    throw new Error('Cannot reach the server. Is the backend running?')
+// Join/discovery requires a future opt-in public-directory API. Demo mode shows sample groups.
+export const getExplore = async () => (isDemo() ? mockWait(exploreCommunities) : [])
+export const getDashboard = communityDashboard
+export const checkout = async ({community_id,amount}) => {
+  const contribution = await createContribution(community_id,amount)
+  const demo = import.meta.env.VITE_DEMO_PAYMENTS === 'true'
+  if (demo) {
+    const record=await confirmDemoContribution(community_id,contribution.id)
+    return {transaction_id:record.id,checkout_url:null,status:'CONFIRMED',simulated:true}
   }
-  if (!json.success) throw new Error(json.message || 'Could not analyse the image')
-  return toProduct(json.data)
+  const payment=await createCheckout(community_id,amount,`contribution-${contribution.id}`)
+  return {transaction_id:payment.transaction.id,checkout_url:payment.checkout?.checkoutUrl||null,status:payment.transaction.status||'PENDING',simulated:payment.transaction.isSimulated}
+}
+export const applyForLoan = async ({community_id,amount,term_months,purpose}) => {
+  const products=await loanProducts(community_id)
+  if(!products.length) throw new Error('This community has not configured any loan products yet. Ask an administrator to create one.')
+  return requestLoan(community_id,{loanProductId:products[0].id,principal:amount,durationMonths:Number(term_months),purpose})
+}
+// The backend has no savings-goals endpoint yet, so AI Planner goals are kept on this device for now
+export const savingsGoal = async (body) => mockWait({ id: `goal_${Date.now()}`, ...body, stored: 'local' })
+
+// Gemma 4 endpoints live on the same backend (/api/v1/ai) and use the logged-in user's token
+export const recommendPlan = (body) => (USE_MOCK_AI ? mockWait(null) : finance('/ai/recommend-plan', { method: 'POST', body: JSON.stringify(body) }))
+export async function analyzeProduct(file) {
+  const fd = new FormData(); fd.append('image', file)
+  const d = await finance('/ai/analyze-product', { method: 'POST', body: fd })
+  return { product_name: d.name, product_category: d.category, description: d.description, specifications: d.specifications || [], detected_price: d.detected_price, is_mock: d.is_mock }
 }

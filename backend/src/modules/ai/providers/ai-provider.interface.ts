@@ -1,0 +1,1 @@
+export interface AiProvider{analyseProduct(input:{imageUrl?:string;description?:string}):Promise<unknown>;explainSavingsPlan(input:{targetAmount:string;currentAmount:string;targetDate?:string;currency:string}):Promise<unknown>}

@@ -10,7 +10,7 @@ const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0)
 
 export default function CommunityDetail({ c, user, onBack }) {
   const adminIdx = c.role === 'admin' ? 0 : 1
-  const meName = c.members[0]
+  const meName = c.members[0] || user.name
   const init = c.members.map((name, i) => ({ name, paid: i % 3 !== 2, admin: i === adminIdx }))
   const [members, setMembers] = useState(init)
   const [holderName, setHolderName] = useState(c.members[1] || c.members[0])
@@ -25,7 +25,7 @@ export default function CommunityDetail({ c, user, onBack }) {
   const [rules, setRules] = useState('1. Pay by the 5th of each month.\n2. Loans are repaid within 3 months.\n3. Be respectful in the group chat.')
   const [msgs, setMsgs] = useState([
     { id: 1, who: init[1]?.name || 'Member', text: 'Reminder: contributions are due on 5 Nov.' },
-    { id: 2, who: init[0].name, poll: { q: 'Move the meeting to Saturday?', opts: [{ t: 'Yes', v: 3 }, { t: 'No', v: 1 }], voted: null } },
+    { id: 2, who: init[0]?.name || user.name, poll: { q: 'Move the meeting to Saturday?', opts: [{ t: 'Yes', v: 3 }, { t: 'No', v: 1 }], voted: null } },
   ])
   const [text, setText] = useState('')
   const [pollOpen, setPollOpen] = useState(false)
@@ -265,7 +265,7 @@ function PayModal({ c, onClose, onPaid }) {
     e.preventDefault()
     if (!(Number(amount) > 0)) return setErr('Enter an amount above K0')
     setBusy(true)
-    try { const r = await checkout({ community_id: c.id, member_id: 'me', amount: Number(amount), payment_method: method }); setRes(r); onPaid(Number(amount)) }
+    try { const r = await checkout({ community_id: c.id, member_id: 'me', amount: Number(amount), payment_method: method }); setRes(r); if (r.status === 'CONFIRMED') onPaid(Number(amount)) }
     catch (x) { setErr(x.message) }
     setBusy(false)
   }
@@ -275,9 +275,9 @@ function PayModal({ c, onClose, onPaid }) {
         <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-bold">Contribute to {c.name}</h2><button aria-label="Close" onClick={onClose}><X size={20} /></button></div>
         {res ? (
           <div className="space-y-3 text-sm">
-            <p className="flex items-center gap-2 text-base font-bold text-green-600"><Check size={20} /> {money(amount)} added to the group wallet</p>
-            <p className="text-stone-500 dark:text-stone-400">You now show as paid. Reference {res.transaction_id}. In live mode this is confirmed once DevDraft verifies the payment.</p>
-            <a href={res.checkout_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 font-semibold text-chuma-600">Open checkout <ExternalLink size={14} /></a>
+            <p className="flex items-center gap-2 text-base font-bold text-green-600"><Check size={20} /> {res.status === 'CONFIRMED' ? `${money(amount)} recorded (SIMULATED)` : 'Payment pending confirmation'}</p>
+            <p className="text-stone-500 dark:text-stone-400">Reference {res.transaction_id}. {res.simulated ? 'This is test money, not a real payment.' : 'Wallet balances update only after the payment provider verifies the payment.'}</p>
+            {res.checkout_url && <a href={res.checkout_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 font-semibold text-chuma-600">Open checkout <ExternalLink size={14} /></a>}
             <Btn onClick={onClose} className="w-full py-3">Done</Btn>
           </div>
         ) : (

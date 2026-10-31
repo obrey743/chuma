@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Sun, Moon, Monitor, Plus, X, LogOut, Info } from 'lucide-react'
 import { Card, Field, Btn, useToast } from '../components/ui'
-import { getAccount, saveAccount } from '../services/auth'
+import { getSession } from '../services/auth'
+import { updateAccount } from '../services/finance'
 import { money } from '../data/mockData'
 
 const opts = [['light', 'Light', Sun], ['dark', 'Dark', Moon], ['system', 'System', Monitor]]
@@ -15,19 +16,15 @@ export default function Profile({ user, setUser, theme, setTheme, replayTour, lo
   const [g, setG] = useState({ title: '', amount: '', date: '' })
   const [about, setAbout] = useState(false)
 
-  const saveDetails = (e) => {
+  const saveDetails = async (e) => {
     e.preventDefault()
-    if (!d.name.trim() || !/\S+@\S+\.\S+/.test(d.email)) return show('Enter your name and a valid email')
-    const a = { ...getAccount(), ...d }; saveAccount(a); setUser(a); show('Details saved')
+    const parts = d.name.trim().split(/\s+/)
+    try { const updated=await updateAccount({firstName:parts.shift()||'',lastName:parts.join(' ')||'-',phoneNumber:d.phone})
+      const view={id:updated.id,name:`${updated.firstName} ${updated.lastName}`,email:updated.email,phone:updated.phoneNumber}
+      setUser(view); show('Profile updated on the server')
+    } catch(err){ show(err.message) }
   }
-  const savePw = (e) => {
-    e.preventDefault()
-    const a = getAccount()
-    if (pw.cur !== a.password) return show('Current password is incorrect')
-    if (pw.next.length < 6) return show('New password needs 6+ characters')
-    if (pw.next !== pw.again) return show('New passwords do not match')
-    saveAccount({ ...a, password: pw.next }); setPw({ cur: '', next: '', again: '' }); show('Password updated')
-  }
+  const savePw = (e) => {e.preventDefault(); show('Password change is not enabled on the API yet. No changes made.')}
   const store = (n) => { setGoals(n); localStorage.setItem('chuma_goals', JSON.stringify(n)) }
   const addGoal = (e) => {
     e.preventDefault()
@@ -44,7 +41,7 @@ export default function Profile({ user, setUser, theme, setTheme, replayTour, lo
         <form onSubmit={saveDetails} className="space-y-4">
           <h2 className="font-bold">Your details</h2>
           <Field label="Full name" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
-          <Field label="Email" type="email" value={d.email} onChange={(e) => setD({ ...d, email: e.target.value })} />
+          <Field label="Email (contact support to change)" type="email" value={d.email} disabled />
           <Field label="Phone number" type="tel" value={d.phone} onChange={(e) => setD({ ...d, phone: e.target.value })} />
           <Btn type="submit">Save details</Btn>
         </form>

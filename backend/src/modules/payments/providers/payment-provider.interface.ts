@@ -1,0 +1,2 @@
+export type CheckoutInput={transactionId:string;amount:string;currency:string;returnUrl?:string}; export type PaymentResult={providerReference:string;status:'PENDING'|'SUCCEEDED'|'FAILED'|'CANCELLED';checkoutUrl?:string;simulated:boolean};
+export interface PaymentProvider{createCheckout(input:CheckoutInput):Promise<PaymentResult>;retrievePaymentStatus(reference:string):Promise<PaymentResult>;verifyPayment(reference:string):Promise<boolean>;processWebhook(payload:unknown,signature?:string):Promise<PaymentResult>;reconcileTransaction(reference:string):Promise<PaymentResult>}

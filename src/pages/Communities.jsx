@@ -1,23 +1,38 @@
 import { useEffect, useState } from 'react'
 import { Users, Crown, ChevronRight } from 'lucide-react'
 import { getMyCommunities, getExplore } from '../services/api'
+import { createCommunity } from '../services/finance'
 import { money } from '../data/mockData'
 import { useToast } from '../components/ui'
 import CommunityDetail from './CommunityDetail'
 
 export default function Communities({ user }) {
   const [open, setOpen] = useState(null)
+  const [creating,setCreating] = useState(false)
+  const [form,setForm] = useState({name:'',minimumContribution:'100',contributionFrequency:'WEEKLY'})
+  const [error,setError] = useState('')
   const [toast, show] = useToast()
   const [mine, setMine] = useState([]); const [explore, setExplore] = useState([])
-  useEffect(() => { getMyCommunities().then(setMine); getExplore().then(setExplore) }, [])
+  const refresh = () => getMyCommunities().then(setMine).catch(e=>setError(e.message))
+  useEffect(() => { refresh(); getExplore().then(setExplore).catch(e=>setError(e.message)) }, [])
+  const addCommunity=async(e)=>{e.preventDefault();setError('');try{await createCommunity({...form,minimumContribution:String(form.minimumContribution),defaultLoanInterestRate:'0.10'});setCreating(false);setForm({name:'',minimumContribution:'100',contributionFrequency:'WEEKLY'});await refresh();show('Community created')}catch(e){setError(e.message)}}
   if (open) return <CommunityDetail c={open} user={user} onBack={() => setOpen(null)} />
   return (
     <div className="space-y-10">
       {toast}
-      <header>
-        <h1 className="text-2xl font-extrabold">Communities</h1>
-        <p className="text-sm text-stone-500 dark:text-stone-400">Save together, lend together.</p>
+      <header className="flex items-center justify-between gap-3">
+        <div><h1 className="text-2xl font-extrabold">Communities</h1>
+        <p className="text-sm text-stone-500 dark:text-stone-400">Save together, lend together.</p></div>
+        <button onClick={()=>setCreating(x=>!x)} className="rounded-full bg-chuma-600 px-4 py-2 text-sm font-semibold text-white">{creating?'Cancel':'Create group'}</button>
       </header>
+      {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {creating && <form onSubmit={addCommunity} className="space-y-3 rounded-3xl bg-white p-5 shadow-sm dark:bg-[#241616]">
+        <h2 className="font-semibold">New community</h2>
+        <input required minLength={2} placeholder="Community name" className="w-full rounded-xl border p-3 text-stone-900" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
+        <input required type="number" min="1" step="0.01" placeholder="Minimum contribution (ZMW)" className="w-full rounded-xl border p-3 text-stone-900" value={form.minimumContribution} onChange={e=>setForm({...form,minimumContribution:e.target.value})}/>
+        <select className="w-full rounded-xl border p-3 text-stone-900" value={form.contributionFrequency} onChange={e=>setForm({...form,contributionFrequency:e.target.value})}><option value="WEEKLY">Weekly</option><option value="MONTHLY">Monthly</option><option value="FLEXIBLE">Flexible</option></select>
+        <button type="submit" className="rounded-full bg-chuma-600 px-5 py-2 font-semibold text-white">Create community</button>
+      </form>}
 
       <section>
         <h2 className="mb-3 text-lg font-bold">Explore communities</h2>
@@ -36,6 +51,7 @@ export default function Communities({ user }) {
 
       <section>
         <h2 className="mb-3 text-lg font-bold">Your communities</h2>
+        {mine.length===0 && <p className="text-sm text-stone-500">No communities yet. Create your first savings group above.</p>}
         <div className="grid gap-5 md:grid-cols-2">
           {mine.map((c) => (
             <button key={c.id} onClick={() => setOpen(c)} className="group rounded-3xl bg-white p-6 text-left shadow-sm ring-1 ring-chuma-100 transition hover:shadow-lg dark:bg-[#241616] dark:ring-white/10">

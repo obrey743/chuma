@@ -1,7 +1,11 @@
-// DEMO AUTH (localStorage only). Replace with your backend's auth endpoints; never store real passwords in the browser.
-const A = 'chuma_account', S = 'chuma_session'
-export const getAccount = () => JSON.parse(localStorage.getItem(A) || 'null')
-export const saveAccount = (a) => localStorage.setItem(A, JSON.stringify(a))
-export const getSession = () => (localStorage.getItem(S) === '1' ? getAccount() : null)
-export const startSession = () => localStorage.setItem(S, '1')
-export const endSession = () => localStorage.removeItem(S)
+// Authentication backed by the finance API. Never persist passwords in browser storage.
+const KEY = 'chuma_session_v1';
+const read = () => { try { return JSON.parse(sessionStorage.getItem(KEY) || 'null') } catch { return null } };
+export const getSession = () => read()?.user || null;
+export const getAccessToken = () => read()?.tokens?.accessToken || null;
+// Demo sessions use sample data instead of the database (see services/demo.js)
+export const isDemo = () => Boolean(read()?.demo);
+export const startSession = (user, tokens, demo = false) => { sessionStorage.setItem(KEY, JSON.stringify({user, tokens, demo})); return user };
+export const endSession = () => sessionStorage.removeItem(KEY);
+export const getAccount = getSession;
+export const saveAccount = () => { throw new Error('Accounts must be updated through the backend API') };

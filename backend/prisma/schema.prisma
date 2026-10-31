@@ -1,0 +1,467 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+
+enum CommunityStatus {
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+enum MembershipRole {
+  ADMIN
+  TREASURER
+  MEMBER
+}
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  LEFT
+}
+enum ContributionFrequency {
+  WEEKLY
+  MONTHLY
+  FLEXIBLE
+}
+enum AccountStatus {
+  ACTIVE
+  FROZEN
+  CLOSED
+}
+enum ContributionStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+  CANCELLED
+}
+enum JournalStatus {
+  DRAFT
+  POSTED
+  REVERSED
+}
+enum LedgerSide {
+  DEBIT
+  CREDIT
+}
+enum LedgerAccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+enum LoanStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  DISBURSED
+  ACTIVE
+  COMPLETED
+  DEFAULTED
+}
+enum ApprovalDecision {
+  APPROVED
+  REJECTED
+}
+enum ScheduleStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+}
+enum ProductType {
+  PHYSICAL
+  SERVICE
+}
+enum ServiceType {
+  COMMUNITY_LOAN
+}
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+}
+enum InventoryMovementType {
+  STOCK_IN
+  STOCK_OUT
+  ADJUSTMENT
+}
+enum GoalType {
+  INDIVIDUAL
+  COLLECTIVE
+}
+enum SavingsGoalStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+enum PurchaseStatus {
+  PENDING
+  APPROVED
+  PAID
+  FULFILLED
+  CANCELLED
+}
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+model User {
+  id String @id @default(uuid()) @db.Uuid
+  firstName String
+  lastName String
+  email String @unique
+  phoneNumber String @unique
+  passwordHash String
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  memberships CommunityMembership[]
+  createdCommunities Community[] @relation("CommunityCreator")
+  refreshTokens RefreshToken[]
+  loanApprovals LoanApproval[]
+  savingsGoals SavingsGoal[]
+}
+
+model RefreshToken {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  tokenHash String @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+model Community {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  description String?
+  communityCode String @unique
+  createdById String @db.Uuid
+  currency String @default("ZMW")
+  minimumContribution Decimal @db.Decimal(18,2)
+  contributionFrequency ContributionFrequency
+  defaultLoanInterestRate Decimal @db.Decimal(7,4)
+  status CommunityStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy User @relation("CommunityCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  memberships CommunityMembership[]
+  savingsAccounts SavingsAccount[]
+  contributions Contribution[]
+  ledgerAccounts LedgerAccount[]
+  journalEntries JournalEntry[]
+  loanProducts LoanProduct[]
+  loans Loan[]
+  products Product[]
+  inventoryItems InventoryItem[]
+  savingsGoals SavingsGoal[]
+  purchaseOrders PurchaseOrder[]
+  paymentTransactions PaymentTransaction[]
+  @@index([createdById])
+}
+
+model CommunityMembership {
+  id String @id @default(uuid()) @db.Uuid
+  communityId String @db.Uuid
+  userId String @db.Uuid
+  role MembershipRole @default(MEMBER)
+  status MembershipStatus @default(ACTIVE)
+  joinedAt DateTime @default(now())
+  community Community @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  savingsAccounts SavingsAccount[]
+  contributions Contribution[]
+  loans Loan[]
+  loanRepayments LoanRepayment[]
+  @@unique([communityId, userId])
+  @@index([userId, status])
+}
+
+model SavingsAccount {
+  id String @id @default(uuid()) @db.Uuid
+  communityId String @db.Uuid
+  memberId String @db.Uuid
+  accountType String @default("GENERAL")
+  status AccountStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+  community Community @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  member CommunityMembership @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  contributions Contribution[]
+  @@unique([memberId, accountType])
+  @@index([communityId])
+}
+
+model Contribution {
+  id String @id @default(uuid()) @db.Uuid
+  communityId String @db.Uuid
+  memberId String @db.Uuid
+  savingsAccountId String @db.Uuid
+  amount Decimal @db.Decimal(18,2)
+  paymentTransactionId String? @unique @db.Uuid
+  reference String @unique
+  status ContributionStatus @default(PENDING)
+  createdAt DateTime @default(now())
+  confirmedAt DateTime?
+  community Community @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  member CommunityMembership @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  savingsAccount SavingsAccount @relation(fields: [savingsAccountId], references: [id], onDelete: Restrict)
+  paymentTransaction PaymentTransaction? @relation(fields: [paymentTransactionId], references: [id], onDelete: Restrict)
+  @@index([communityId, status, createdAt])
+}
+
+model LedgerAccount {
+  id String @id @default(uuid()) @db.Uuid
+  communityId String @db.Uuid
+  code String
+  name String
+  type LedgerAccountType
+  isRestricted Boolean @default(false)
+  createdAt DateTime @default(now())
+  community Community @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  lines JournalLine[]
+  @@unique([communityId, code])
+}
+
+model JournalEntry {
+  id String @id @default(uuid()) @db.Uuid
+  communityId String @db.Uuid
+  reference String @unique
+  description String
+  status JournalStatus @default(POSTED)
+  postedAt DateTime @default(now())
+  reversalOfId String? @unique @db.Uuid
+  community Community @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  reversalOf JournalEntry? @relation("Reversals", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversal JournalEntry? @relation("Reversals")
+  lines JournalLine[]
+  @@index([communityId, postedAt])
+}
+
+model JournalLine {
+  id String @id @default(uuid()) @db.Uuid
+  journalEntryId String @db.Uuid
+  ledgerAccountId String @db.Uuid
+  side LedgerSide
+  amount Decimal @db.Decimal(18,2)
+  entry JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  account LedgerAccount @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
+  @@index([ledgerAccountId])
+}
+
+model LoanProduct {
+  id String @id @default(uuid()) @db.Uuid
+  communityId String @db.Uuid
+  name String
+  annualInterestRate Decimal @db.Decimal(7,4)
+  minAmount Decimal @db.Decimal(18,2)
+  maxAmount Decimal @db.Decimal(18,2)
+  minMonths Int
+  maxMonths Int
+  isActive Boolean @default(true)
+  community Community @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  loans Loan[]
+  serviceProducts Product[]
+  @@unique([communityId, name])
+}
+
+model Loan {
+  id String @id @default(uuid()) @db.Uuid
+  communityId String @db.Uuid
+  memberId String @db.Uuid
+  loanProductId String @db.Uuid
+  principal Decimal @db.Decimal(18,2)
+  annualInterestRate Decimal @db.Decimal(7,4)
+  durationMonths Int
+  interestAmount Decimal @db.Decimal(18,2)
+  totalPayable Decimal @db.Decimal(18,2)
+  status LoanStatus @default(PENDING)
+  purpose String
+  appliedAt DateTime @default(now())
+  approvedAt DateTime?
+  disbursedAt DateTime?
+  completedAt DateTime?
+  community Community @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  member CommunityMembership @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  loanProduct LoanProduct @relation(fields: [loanProductId], references: [id], onDelete: Restrict)
+  approvals LoanApproval[]
+  schedule LoanRepaymentSchedule[]
+  repayments LoanRepayment[]
+  @@index([communityId, status])
+}
+
+model LoanApproval {
+  id String @id @default(uuid()) @db.Uuid
+  loanId String @db.Uuid
+  approverId String @db.Uuid
+  decision ApprovalDecision
+  note String?
+  createdAt DateTime @default(now())
+  loan Loan @relation(fields: [loanId], references: [id], onDelete: Restrict)
+  approver User @relation(fields: [approverId], references: [id], onDelete: Restrict)
+  @@unique([loanId, approverId])
+}
+
+model LoanRepaymentSchedule {
+  id String @id @default(uuid()) @db.Uuid
+  loanId String @db.Uuid
+  instalmentNumber Int
+  dueDate DateTime
+  principalDue Decimal @db.Decimal(18,2)
+  interestDue Decimal @db.Decimal(18,2)
+  totalDue Decimal @db.Decimal(18,2)
+  principalPaid Decimal @default(0) @db.Decimal(18,2)
+  interestPaid Decimal @default(0) @db.Decimal(18,2)
+  status ScheduleStatus @default(PENDING)
+  loan Loan @relation(fields: [loanId], references: [id], onDelete: Restrict)
+  @@unique([loanId, instalmentNumber])
+}
+
+model LoanRepayment {
+  id String @id @default(uuid()) @db.Uuid
+  loanId String @db.Uuid
+  memberId String @db.Uuid
+  paymentTransactionId String? @unique @db.Uuid
+  amount Decimal @db.Decimal(18,2)
+  principalAmount Decimal @db.Decimal(18,2)
+  interestAmount Decimal @db.Decimal(18,2)
+  reference String @unique
+  paidAt DateTime @default(now())
+  loan Loan @relation(fields: [loanId], references: [id], onDelete: Restrict)
+  member CommunityMembership @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  paymentTransaction PaymentTransaction? @relation(fields: [paymentTransactionId], references: [id], onDelete: Restrict)
+}
+
+model Product {
+  id String @id @default(uuid()) @db.Uuid
+  communityId String @db.Uuid
+  name String
+  description String?
+  productType ProductType
+  serviceType ServiceType?
+  loanProductId String? @db.Uuid
+  price Decimal? @db.Decimal(18,2)
+  status ProductStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+  community Community @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  loanProduct LoanProduct? @relation(fields: [loanProductId], references: [id], onDelete: Restrict)
+  inventoryItem InventoryItem?
+  goals SavingsGoal[]
+  purchaseItems PurchaseOrderItem[]
+  @@index([communityId, productType, status])
+}
+
+model InventoryItem {
+  id String @id @default(uuid()) @db.Uuid
+  communityId String @db.Uuid
+  productId String @unique @db.Uuid
+  quantity Int @default(0)
+  updatedAt DateTime @updatedAt
+  community Community @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  movements InventoryMovement[]
+  @@index([communityId])
+}
+
+model InventoryMovement {
+  id String @id @default(uuid()) @db.Uuid
+  inventoryItemId String @db.Uuid
+  type InventoryMovementType
+  quantity Int
+  quantityBefore Int
+  quantityAfter Int
+  reason String
+  reference String @unique
+  createdById String @db.Uuid
+  createdAt DateTime @default(now())
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  @@index([inventoryItemId, createdAt])
+}
+
+model SavingsGoal {
+  id String @id @default(uuid()) @db.Uuid
+  communityId String @db.Uuid
+  ownerUserId String? @db.Uuid
+  productId String? @db.Uuid
+  type GoalType
+  name String
+  targetAmount Decimal @db.Decimal(18,2)
+  targetDate DateTime?
+  status SavingsGoalStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+  community Community @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  owner User? @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  product Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
+  contributions SavingsGoalContribution[]
+  @@index([communityId, status])
+}
+
+model SavingsGoalContribution {
+  id String @id @default(uuid()) @db.Uuid
+  savingsGoalId String @db.Uuid
+  amount Decimal @db.Decimal(18,2)
+  paymentTransactionId String? @unique @db.Uuid
+  reference String @unique
+  status ContributionStatus @default(PENDING)
+  createdAt DateTime @default(now())
+  confirmedAt DateTime?
+  savingsGoal SavingsGoal @relation(fields: [savingsGoalId], references: [id], onDelete: Restrict)
+  paymentTransaction PaymentTransaction? @relation(fields: [paymentTransactionId], references: [id], onDelete: Restrict)
+}
+
+model PurchaseOrder {
+  id String @id @default(uuid()) @db.Uuid
+  communityId String @db.Uuid
+  requestedById String @db.Uuid
+  approvedById String? @db.Uuid
+  status PurchaseStatus @default(PENDING)
+  totalAmount Decimal @db.Decimal(18,2)
+  reference String @unique
+  createdAt DateTime @default(now())
+  approvedAt DateTime?
+  paidAt DateTime?
+  fulfilledAt DateTime?
+  community Community @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  items PurchaseOrderItem[]
+  @@index([communityId, status])
+}
+
+model PurchaseOrderItem {
+  id String @id @default(uuid()) @db.Uuid
+  purchaseOrderId String @db.Uuid
+  productId String @db.Uuid
+  quantity Int
+  unitPrice Decimal @db.Decimal(18,2)
+  lineTotal Decimal @db.Decimal(18,2)
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+}
+
+model PaymentTransaction {
+  id String @id @default(uuid()) @db.Uuid
+  communityId String @db.Uuid
+  provider String
+  providerReference String? @unique
+  idempotencyKey String @unique
+  amount Decimal @db.Decimal(18,2)
+  currency String @default("ZMW")
+  status PaymentStatus @default(PENDING)
+  isSimulated Boolean @default(false)
+  metadata Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  community Community @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  contribution Contribution?
+  loanRepayment LoanRepayment?
+  goalContribution SavingsGoalContribution?
+  @@index([communityId, status])
+}
