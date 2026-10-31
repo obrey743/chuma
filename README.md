@@ -1,1 +1,1 @@
-he Village Banking App is a community-focused financial platform designed to help groups manage savings, loans, community products, inventory and savings goals. AI makes the platform more accessible by helping members understand products and create practical savings plan
+ A community-focused financial platform designed to help groups manage savings, loans, community products, inventory and savings goals. AI makes the platform more accessible by helping members understand products and create practical savings plan
