@@ -15,9 +15,11 @@ In development, Vite runs the frontend on port 5173 and forwards every `/api` ca
 
 You need Node 20+ and a PostgreSQL database. A free one from neon.tech works fine.
 
+No database yet? You can still run the app and click "Try the demo" on the login screen. It uses sample data for everything except the AI Planner, which still talks to Gemma. Set `DEMO_MODE=false` in `backend/.env` before going live.
+
 ```bash
 npm install                          # installs the frontend and the backend
-cp backend/.env.example backend/.env
+cp backend/env.template backend/.env
 ```
 
 Then fill in `backend/.env`:

@@ -4,7 +4,7 @@ TypeScript/Express/PostgreSQL API for community savings, lending, products, and 
 
 ## Run locally
 
-1. Copy `.env.example` to `.env` and set secrets. The server can start without `DATABASE_URL`; health then reports database unavailable and database-backed endpoints return HTTP 503.
+1. Copy `env.template` to `.env` and set secrets. The server can start without `DATABASE_URL`; health then reports database unavailable and database-backed endpoints return HTTP 503.
 2. Run `npm install`, `npm run db:generate`, and `npm run dev`.
 3. With a Neon PostgreSQL URL configured, run `npm run db:migrate -- --name init` and `npm run db:seed`.
 

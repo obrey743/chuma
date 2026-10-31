@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "prisma generate",
-    "start": "prisma db push --skip-generate && tsx src/server.ts",
+    "start": "sh -c 'if [ -n \"$DATABASE_URL\" ]; then prisma db push --skip-generate; fi; exec tsx src/server.ts'",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
