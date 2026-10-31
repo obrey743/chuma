@@ -10,6 +10,7 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
   const status = error.statusCode ?? 500;
   // Log unexpected failures on the server so they can be diagnosed (the client only gets a generic message)
   if (status >= 500) console.error(`[error] ${req.method} ${req.path}:`, error);
+  else if (req.path.includes('/ai/')) console.warn(`[ai] ${req.method} ${req.path} -> ${status} ${error.code ?? ''}: ${error.message}`);
   const message = status >= 500 && !error.code ? 'Internal server error' : error.message;
   res.status(status).json({ error: { code: error.code ?? 'INTERNAL_ERROR', message, ...(error.details ? { details: error.details } : {}) } });
 };

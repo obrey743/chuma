@@ -1,16 +1,41 @@
-import { getAccessToken, getSession, isDemo } from './auth'
+import { getAccessToken, getRefreshToken, getSession, isDemo, updateTokens } from './auth'
 import { demoRequest } from './demo'
 // Same server as the frontend. In development Vite forwards /api to the backend (see vite.config.js).
 const BASE = import.meta.env.VITE_API_URL || '/api/v1'
-export async function finance(path, options = {}) {
-  // Demo mode: sample data for everything except the AI, which still uses real Gemma
-  if (isDemo() && !path.startsWith('/ai/')) return demoRequest(path, options, getSession())
+
+async function send(path, options) {
   const headers = { ...(options.body && !(options.body instanceof FormData) ? {'Content-Type':'application/json'} : {}), ...options.headers }
   const token = getAccessToken(); if (token) headers.Authorization = `Bearer ${token}`
   let response
   try { response = await fetch(`${BASE}${path}`, {...options, headers}) }
-  catch { throw new Error('Server is unavailable. Start it with npm run dev.') }
+  catch { throw new Error('Server is unavailable. Check your connection and try again.') }
   const json = await response.json().catch(() => ({}))
+  return { response, json }
+}
+
+// Login tokens last 15 minutes. When one expires, get a fresh one and retry once, so the user isn't kicked out.
+let renewing = null
+async function renewToken() {
+  renewing ??= (async () => {
+    try {
+      const refreshToken = getRefreshToken()
+      if (!isDemo() && !refreshToken) return false
+      const { response, json } = isDemo()
+        ? await send('/auth/demo', { method: 'POST' })
+        : await send('/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken }) })
+      if (!response.ok || !json?.data?.tokens) return false
+      updateTokens(json.data.tokens); return true
+    } finally { renewing = null }
+  })()
+  return renewing
+}
+
+export async function finance(path, options = {}) {
+  // Demo mode: sample data for everything except the AI, which still uses real Gemma
+  if (isDemo() && !path.startsWith('/ai/')) return demoRequest(path, options, getSession())
+  let { response, json } = await send(path, options)
+  if (response.status === 401 && getSession() && !path.startsWith('/auth/') && await renewToken()) ({ response, json } = await send(path, options))
+  if (response.status === 401 && getSession() && !path.startsWith('/auth/')) throw new Error('Your session has expired. Please log out and sign in again.')
   if (!response.ok) throw new Error(json?.error?.message || json?.message || `Request failed (${response.status})`)
   return json.data ?? json
 }

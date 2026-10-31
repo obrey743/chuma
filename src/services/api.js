@@ -37,8 +37,25 @@ export const savingsGoal = async (body) => mockWait({ id: `goal_${Date.now()}`, 
 
 // Gemma 4 endpoints live on the same backend (/api/v1/ai) and use the logged-in user's token
 export const recommendPlan = (body) => (USE_MOCK_AI ? mockWait(null) : finance('/ai/recommend-plan', { method: 'POST', body: JSON.stringify(body) }))
+// Phone photos are often several MB (or HEIC on iPhone). Resize to a JPEG of at most 1600px before uploading:
+// faster, under the 5MB limit, and plenty for Gemma to recognise the product.
+async function prepareImage(file) {
+  try {
+    const bitmap = await createImageBitmap(file)
+    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(bitmap.width * scale); canvas.height = Math.round(bitmap.height * scale)
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85))
+    if (blob) return new File([blob], 'photo.jpg', { type: 'image/jpeg' })
+  } catch { /* browser can't read this format: send the original */ }
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('This photo format isn’t supported. Please use a JPG or PNG photo (on iPhone: Settings › Camera › Formats › Most Compatible).')
+  if (file.size > 5 * 1024 * 1024) throw new Error('This photo is too large. Please use one under 5MB.')
+  return file
+}
+
 export async function analyzeProduct(file) {
-  const fd = new FormData(); fd.append('image', file)
+  const fd = new FormData(); fd.append('image', await prepareImage(file))
   const d = await finance('/ai/analyze-product', { method: 'POST', body: fd })
   return { product_name: d.name, product_category: d.category, description: d.description, specifications: d.specifications || [], detected_price: d.detected_price, is_mock: d.is_mock }
 }
