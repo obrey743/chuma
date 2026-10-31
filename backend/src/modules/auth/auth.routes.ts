@@ -25,7 +25,9 @@ authRouter.post('/register', credentialsLimit, asyncHandler(async (req, res) => 
   const input = registerSchema.parse(req.body); const db = requirePrisma();
   const duplicate = await db.user.findFirst({ where: { OR: [{ email: input.email.toLowerCase() }, { phoneNumber: input.phoneNumber }] } });
   if (duplicate) throw new AppError(409, 'ACCOUNT_EXISTS', 'An account with that email or phone number already exists');
-  const user = await db.user.create({ data: { ...input, email: input.email.toLowerCase(), passwordHash: await argon2.hash(input.password) }, select: publicUser });
+  // Never store the plain password: only its argon2 hash goes into the database
+  const { password, ...profile } = input;
+  const user = await db.user.create({ data: { ...profile, email: input.email.toLowerCase(), passwordHash: await argon2.hash(password) }, select: publicUser });
   res.status(201).json({ data: { user, tokens: await issueTokens(user) } });
 }));
 // Demo login: no database needed. The token only unlocks the AI endpoints; the frontend serves everything else

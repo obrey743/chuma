@@ -5,9 +5,11 @@ export class AppError extends Error {
 }
 export const asyncHandler = (fn: RequestHandler): RequestHandler => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 export const notFound: RequestHandler = (req, _res, next) => next(new AppError(404, 'NOT_FOUND', `Route ${req.method} ${req.path} was not found`));
-export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
+export const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
   if (error instanceof ZodError) return void res.status(422).json({ error: { code: 'VALIDATION_ERROR', message: 'Request validation failed', details: error.flatten() } });
   const status = error.statusCode ?? 500;
+  // Log unexpected failures on the server so they can be diagnosed (the client only gets a generic message)
+  if (status >= 500) console.error(`[error] ${req.method} ${req.path}:`, error);
   const message = status >= 500 && !error.code ? 'Internal server error' : error.message;
   res.status(status).json({ error: { code: error.code ?? 'INTERNAL_ERROR', message, ...(error.details ? { details: error.details } : {}) } });
 };
